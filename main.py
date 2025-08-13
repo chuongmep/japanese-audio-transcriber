@@ -5,8 +5,8 @@ import multiprocessing
 from pydub import AudioSegment
 import simpleaudio as sa
 from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QPushButton, QFileDialog,
-    QListWidget, QHBoxLayout, QLabel, QMessageBox
+    QApplication, QWidget, QVBoxLayout, QHBoxLayout,
+    QPushButton, QListWidget, QLabel, QFileDialog, QMessageBox
 )
 from PySide6.QtCore import QThread, Signal, QTimer
 from deep_translator import GoogleTranslator
@@ -41,56 +41,58 @@ class AudioTranscriber(QWidget):
         self.setWindowTitle("Japanese Audio Transcriber")
         self.resize(1000, 400)
 
-        layout = QHBoxLayout()
-        self.setLayout(layout)
+        # --- Layout ---
+        main_layout = QHBoxLayout()
+        self.setLayout(main_layout)
 
-        # Left panel: Controls + Japanese list
-        left_layout = QVBoxLayout()
-        layout.addLayout(left_layout)
+        control_layout = QVBoxLayout()
+        main_layout.addLayout(control_layout)
 
+        # Load & control buttons
         self.load_btn = QPushButton("Load Audio")
         self.load_btn.clicked.connect(self.load_audio)
-        left_layout.addWidget(self.load_btn)
+        control_layout.addWidget(self.load_btn)
 
         self.transcribe_btn = QPushButton("Transcribe")
         self.transcribe_btn.clicked.connect(self.transcribe_audio)
-        left_layout.addWidget(self.transcribe_btn)
+        control_layout.addWidget(self.transcribe_btn)
 
         self.play_btn = QPushButton("Play")
         self.play_btn.clicked.connect(self.play_audio)
-        left_layout.addWidget(self.play_btn)
+        control_layout.addWidget(self.play_btn)
 
         self.stop_btn = QPushButton("Stop")
         self.stop_btn.clicked.connect(self.stop_audio)
-        left_layout.addWidget(self.stop_btn)
+        control_layout.addWidget(self.stop_btn)
 
-        self.status_label = QLabel("")
-        left_layout.addWidget(self.status_label)
+        self.status_label = QLabel("Loading Whisper model...")
+        control_layout.addWidget(self.status_label)
 
-        # Two columns for sentences and translations
+        # Sentence lists
         list_layout = QHBoxLayout()
-        left_layout.addLayout(list_layout)
+        control_layout.addLayout(list_layout)
 
         self.ja_list = QListWidget()
-        self.ja_list.itemClicked.connect(self.jump_to_word)
+        self.ja_list.itemClicked.connect(self.jump_to_sentence)
         list_layout.addWidget(self.ja_list)
 
         self.vi_list = QListWidget()
         list_layout.addWidget(self.vi_list)
 
-        # Internal state
+        # --- Internal state ---
         self.audio_path = None
         self.audio_segment = None
         self.play_obj = None
         self.segments = []
         self.worker = None
-        self.current_playback_start = 0
+        self.current_playback_start = 0  # in milliseconds
+        self.user_clicked_sentence = False
 
         self.update_timer = QTimer()
         self.update_timer.setInterval(100)
         self.update_timer.timeout.connect(self.update_current_sentence)
 
-        self.status_label.setText("Loading Whisper model...")
+        # Load Whisper model
         QApplication.processEvents()
         try:
             self.model = whisper.load_model("small")
@@ -99,8 +101,10 @@ class AudioTranscriber(QWidget):
             self.status_label.setText(f"Error loading model: {e}")
             self.model = None
 
+        # Translator
         self.translator = GoogleTranslator(source='ja', target='vi')
 
+    # --- Audio load ---
     def load_audio(self):
         file_name, _ = QFileDialog.getOpenFileName(
             self, "Select Audio", "", "Audio Files (*.mp3 *.wav)"
@@ -109,10 +113,11 @@ class AudioTranscriber(QWidget):
             try:
                 self.audio_path = file_name
                 self.audio_segment = AudioSegment.from_file(file_name)
-                self.status_label.setText(f"Loaded audio: {os.path.basename(file_name)}")
+                self.status_label.setText(f"Loaded: {os.path.basename(file_name)}")
             except Exception as e:
                 self.status_label.setText(f"Error loading audio: {e}")
 
+    # --- Transcription ---
     def transcribe_audio(self):
         if not self.audio_path or not self.model:
             self.status_label.setText("Audio or model not loaded.")
@@ -132,39 +137,41 @@ class AudioTranscriber(QWidget):
         self.vi_list.clear()
 
         for seg in segments:
-            # Skip empty Japanese sentences
             if not seg['text'].strip():
                 continue
-
-            self.segments.append(seg)  # keep segment in internal list
-
-            # Japanese sentence with timestamp
+            self.segments.append(seg)
+            # Japanese with timestamps
             self.ja_list.addItem(f"{seg['text']} ({seg['start']:.2f}-{seg['end']:.2f})")
-
-            # Vietnamese translation, can be empty
+            # Vietnamese translation
             try:
                 viet = self.translator.translate(seg['text'])
             except Exception:
                 viet = ""
             self.vi_list.addItem(viet)
 
+        self.status_label.setText(f"Transcription done: {len(self.segments)} segments")
+
     def on_transcription_error(self, message):
         self.status_label.setText(f"Transcription error: {message}")
 
-    def play_audio(self, start_ms=0):
-        if self.audio_segment:
-            try:
-                segment_to_play = self.audio_segment[start_ms:]
-                self.play_obj = sa.play_buffer(
-                    segment_to_play.raw_data,
-                    num_channels=segment_to_play.channels,
-                    bytes_per_sample=segment_to_play.sample_width,
-                    sample_rate=segment_to_play.frame_rate
-                )
-                self.current_playback_start = start_ms
-                self.update_timer.start()
-            except Exception as e:
-                self.status_label.setText(f"Audio playback error: {e}")
+    # --- Audio playback ---
+    def play_audio(self, start_ms=None):
+        if not self.audio_segment:
+            return
+        if start_ms is None:
+            start_ms = self.current_playback_start
+        try:
+            segment_to_play = self.audio_segment[start_ms:]
+            self.play_obj = sa.play_buffer(
+                segment_to_play.raw_data,
+                num_channels=segment_to_play.channels,
+                bytes_per_sample=segment_to_play.sample_width,
+                sample_rate=segment_to_play.frame_rate
+            )
+            self.current_playback_start = start_ms
+            self.update_timer.start()
+        except Exception as e:
+            self.status_label.setText(f"Audio playback error: {e}")
 
     def stop_audio(self):
         if self.play_obj:
@@ -174,28 +181,38 @@ class AudioTranscriber(QWidget):
                 self.status_label.setText(f"Audio stop error: {e}")
         self.update_timer.stop()
 
-    def jump_to_word(self, item):
-        try:
-            idx = self.ja_list.currentRow()
-            start_time = float(self.segments[idx]['start'])
-            start_ms = int(start_time * 1000)
-            self.stop_audio()
-            self.play_audio(start_ms)
-        except Exception as e:
-            self.status_label.setText(f"Jump error: {e}")
+    # --- Jump to sentence on click ---
+    def jump_to_sentence(self, item):
+        idx = self.ja_list.currentRow()
+        if idx < 0 or idx >= len(self.segments):
+            return
+        start_time = self.segments[idx]['start']
+        start_ms = int(start_time * 1000)
+        self.stop_audio()
+        self.play_audio(start_ms)
+        self.user_clicked_sentence = True  # prevent auto-selection overwrite
 
+    # --- Update selection according to playback ---
     def update_current_sentence(self):
         if not self.play_obj or not self.audio_segment:
             return
         if self.play_obj.is_playing():
             self.current_playback_start += self.update_timer.interval()
+
         current_sec = self.current_playback_start / 1000.0
+
+        if self.user_clicked_sentence:
+            # skip auto-selection for one cycle after user click
+            self.user_clicked_sentence = False
+            return
+
         for i, seg in enumerate(self.segments):
             if seg['start'] <= current_sec <= seg['end']:
                 self.ja_list.setCurrentRow(i)
                 self.vi_list.setCurrentRow(i)
                 break
 
+    # --- Close event ---
     def closeEvent(self, event):
         reply = QMessageBox.question(
             self, 'Quit', 'Are you sure you want to exit?',
@@ -211,6 +228,7 @@ class AudioTranscriber(QWidget):
             event.ignore()
 
 
+# --- Main ---
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = AudioTranscriber()
