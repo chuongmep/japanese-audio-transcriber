@@ -55,6 +55,10 @@ pip install -r requirements.txt
 ```bash
 brew install ffmpeg
 ```
+Windows 
+```bash
+winget install --id Gyan.FFmpeg -e
+```
 
 ## Usage
 
