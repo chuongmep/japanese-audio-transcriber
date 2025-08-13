@@ -3,3 +3,4 @@ pyside6
 simpleaudio
 whisper
 torch
+openai-whisper

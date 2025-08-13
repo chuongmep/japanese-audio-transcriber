@@ -3,7 +3,6 @@
 
 A Python desktop application for **Japanese audio transcription** using [Whisper](https://github.com/openai/whisper), with an interactive UI for playback and sentence navigation. Perfect for language learners who want to study audio with timestamps.
 
-![](./docs/iShot_2025-08-13_22.16.42.png)
 
 ## Features
 
@@ -16,14 +15,14 @@ A Python desktop application for **Japanese audio transcription** using [Whisper
 
 ## Screenshots
 
-*(Add screenshots of your UI here)*
+![](./docs/iShot_2025-08-13_22.16.42.png)
 
 ## Installation
 
 1. Clone the repository:
 
 ```bash
-git clone https://github.com/yourusername/japanese-audio-transcriber.git
+git clone https://github.com/chuongmep/japanese-audio-transcriber.git
 cd japanese-audio-transcriber
 ```
 
@@ -88,3 +87,11 @@ Contributions are welcome! You can improve:
 ## License
 
 MIT License – see `LICENSE` file.
+
+
+## Issues 
+
+- Whisper TypeError: argument of type 'NoneType' is not iterable
+```bash
+pip install git+https://github.com/openai/whisper.git
+```
