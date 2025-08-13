@@ -88,7 +88,3 @@ Contributions are welcome! You can improve:
 ## License
 
 MIT License – see `LICENSE` file.
-
----
-
-If you want, I can also **write a `requirements.txt`** that works directly with this project, so someone can clone and run it without issues. Do you want me to do that?
