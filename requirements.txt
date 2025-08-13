@@ -4,3 +4,4 @@ simpleaudio
 whisper
 torch
 openai-whisper
+googletrans
