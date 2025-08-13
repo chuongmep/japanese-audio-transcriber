@@ -9,14 +9,15 @@ from PySide6.QtWidgets import (
     QListWidget, QHBoxLayout, QLabel, QMessageBox
 )
 from PySide6.QtCore import QThread, Signal, QTimer
+from deep_translator import GoogleTranslator
 
 # Ensure safe multiprocessing start method on macOS
 multiprocessing.set_start_method('spawn', force=True)
 
 
 class TranscribeWorker(QThread):
-    finished = Signal(list)  # segments list
-    error = Signal(str)      # error messages
+    finished = Signal(list)
+    error = Signal(str)
 
     def __init__(self, model, audio_path):
         super().__init__()
@@ -38,39 +39,44 @@ class AudioTranscriber(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Japanese Audio Transcriber")
-        self.resize(900, 400)
+        self.resize(1000, 400)
 
-        # Layout
         layout = QHBoxLayout()
         self.setLayout(layout)
 
-        # Left: Controls
-        control_layout = QVBoxLayout()
-        layout.addLayout(control_layout)
+        # Left panel: Controls + Japanese list
+        left_layout = QVBoxLayout()
+        layout.addLayout(left_layout)
 
         self.load_btn = QPushButton("Load Audio")
         self.load_btn.clicked.connect(self.load_audio)
-        control_layout.addWidget(self.load_btn)
+        left_layout.addWidget(self.load_btn)
 
         self.transcribe_btn = QPushButton("Transcribe")
         self.transcribe_btn.clicked.connect(self.transcribe_audio)
-        control_layout.addWidget(self.transcribe_btn)
+        left_layout.addWidget(self.transcribe_btn)
 
         self.play_btn = QPushButton("Play")
         self.play_btn.clicked.connect(self.play_audio)
-        control_layout.addWidget(self.play_btn)
+        left_layout.addWidget(self.play_btn)
 
         self.stop_btn = QPushButton("Stop")
         self.stop_btn.clicked.connect(self.stop_audio)
-        control_layout.addWidget(self.stop_btn)
+        left_layout.addWidget(self.stop_btn)
 
         self.status_label = QLabel("")
-        control_layout.addWidget(self.status_label)
+        left_layout.addWidget(self.status_label)
 
-        # Right: Transcription list
-        self.transcription_list = QListWidget()
-        self.transcription_list.itemClicked.connect(self.jump_to_word)
-        layout.addWidget(self.transcription_list)
+        # Two columns for sentences and translations
+        list_layout = QHBoxLayout()
+        left_layout.addLayout(list_layout)
+
+        self.ja_list = QListWidget()
+        self.ja_list.itemClicked.connect(self.jump_to_word)
+        list_layout.addWidget(self.ja_list)
+
+        self.vi_list = QListWidget()
+        list_layout.addWidget(self.vi_list)
 
         # Internal state
         self.audio_path = None
@@ -78,14 +84,12 @@ class AudioTranscriber(QWidget):
         self.play_obj = None
         self.segments = []
         self.worker = None
-        self.current_playback_start = 0  # ms
+        self.current_playback_start = 0
 
-        # Timer for auto-selecting sentence
         self.update_timer = QTimer()
-        self.update_timer.setInterval(100)  # 100ms
+        self.update_timer.setInterval(100)
         self.update_timer.timeout.connect(self.update_current_sentence)
 
-        # Load Whisper model
         self.status_label.setText("Loading Whisper model...")
         QApplication.processEvents()
         try:
@@ -94,6 +98,8 @@ class AudioTranscriber(QWidget):
         except Exception as e:
             self.status_label.setText(f"Error loading model: {e}")
             self.model = None
+
+        self.translator = GoogleTranslator(source='ja', target='vi')
 
     def load_audio(self):
         file_name, _ = QFileDialog.getOpenFileName(
@@ -121,11 +127,26 @@ class AudioTranscriber(QWidget):
         self.worker.start()
 
     def on_transcription_done(self, segments):
-        self.segments = segments
-        self.transcription_list.clear()
-        for seg in self.segments:
-            self.transcription_list.addItem(f"{seg['text']} ({seg['start']:.2f} - {seg['end']:.2f})")
-        self.status_label.setText("Transcription done!")
+        self.segments = []
+        self.ja_list.clear()
+        self.vi_list.clear()
+
+        for seg in segments:
+            # Skip empty Japanese sentences
+            if not seg['text'].strip():
+                continue
+
+            self.segments.append(seg)  # keep segment in internal list
+
+            # Japanese sentence with timestamp
+            self.ja_list.addItem(f"{seg['text']} ({seg['start']:.2f}-{seg['end']:.2f})")
+
+            # Vietnamese translation, can be empty
+            try:
+                viet = self.translator.translate(seg['text'])
+            except Exception:
+                viet = ""
+            self.vi_list.addItem(viet)
 
     def on_transcription_error(self, message):
         self.status_label.setText(f"Transcription error: {message}")
@@ -155,8 +176,8 @@ class AudioTranscriber(QWidget):
 
     def jump_to_word(self, item):
         try:
-            text = item.text()
-            start_time = float(text.split("(")[-1].split("-")[0])
+            idx = self.ja_list.currentRow()
+            start_time = float(self.segments[idx]['start'])
             start_ms = int(start_time * 1000)
             self.stop_audio()
             self.play_audio(start_ms)
@@ -166,15 +187,13 @@ class AudioTranscriber(QWidget):
     def update_current_sentence(self):
         if not self.play_obj or not self.audio_segment:
             return
-
-        # Estimate current time in ms
         if self.play_obj.is_playing():
             self.current_playback_start += self.update_timer.interval()
-
         current_sec = self.current_playback_start / 1000.0
         for i, seg in enumerate(self.segments):
             if seg['start'] <= current_sec <= seg['end']:
-                self.transcription_list.setCurrentRow(i)
+                self.ja_list.setCurrentRow(i)
+                self.vi_list.setCurrentRow(i)
                 break
 
     def closeEvent(self, event):

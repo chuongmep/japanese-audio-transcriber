@@ -12,10 +12,16 @@ A Python desktop application for **Japanese audio transcription** using [Whisper
 * Click on sentences to jump to the corresponding point in the audio.
 * Status updates for model loading and transcription progress.
 * Safe on macOS with PyTorch + multiprocessing.
+* Highly sentence-based transcription for better navigation.
+* Translate transcripts to Vietnamese (optional).
 
 ## Screenshots
 
-![](./docs/iShot_2025-08-13_22.16.42.png)
+![](./docs/iShot_2025-08-14_00.03.48.png)
+
+## Videos
+ 
+[![Watch the video](https://img.youtube.com/vi/fxVD7xTPHSs/maxresdefault.jpg)](https://www.youtube.com/watch?v=fxVD7xTPHSs)
 
 ## Installation
 
