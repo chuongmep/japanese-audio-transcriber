@@ -182,15 +182,25 @@ class AudioTranscriber(QWidget):
         self.update_timer.stop()
 
     # --- Jump to sentence on click ---
+    # --- Jump to sentence on click ---
     def jump_to_sentence(self, item):
         idx = self.ja_list.currentRow()
         if idx < 0 or idx >= len(self.segments):
             return
+
+        # Stop current playback first
+        self.stop_audio()
+
+        # Get start time of clicked sentence
         start_time = self.segments[idx]['start']
         start_ms = int(start_time * 1000)
-        self.stop_audio()
+
+        # Start playing from clicked sentence
+        self.current_playback_start = start_ms
         self.play_audio(start_ms)
-        self.user_clicked_sentence = True  # prevent auto-selection overwrite
+
+        # Prevent auto-selection overwrite
+        self.user_clicked_sentence = True
 
     # --- Update selection according to playback ---
     def update_current_sentence(self):
